@@ -58,6 +58,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (incFecha) incFecha.value = new Date().toISOString().split("T")[0];
 
     handleNarrativeFlowChange();
+
+    // Listener global para cerrar el sidebar en móviles al hacer clic fuera de él
+    document.addEventListener("click", (e) => {
+        const sidebar = document.getElementById("sidebar");
+        const mobileToggleBtn = document.querySelector(".mobile-toggle-btn");
+        if (sidebar && sidebar.classList.contains("open")) {
+            if (!sidebar.contains(e.target) && mobileToggleBtn && !mobileToggleBtn.contains(e.target)) {
+                sidebar.classList.remove("open");
+            }
+        }
+    });
 });
 
 function saveState() {
@@ -248,8 +259,18 @@ function initSimulatorDefaults() {
     if (incTot === 0) incTot = 1200;
     let gasTot = 0; db.gastos?.forEach(g => { if (g.fechaConsumo?.startsWith(cur)) gasTot += g.montoTotal; });
     if (gasTot === 0) gasTot = 750;
+    
+    // Calcular líquido actual real (solo ingresos pasados/hoy)
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayDate = new Date(todayStr + "T00:00:00");
+    let incAcreditados = 0;
+    db.ingresos?.forEach(i => {
+        if (i.fechaAcreditacion && new Date(i.fechaAcreditacion + "T00:00:00") <= todayDate) {
+            incAcreditados += i.monto;
+        }
+    });
     const paid = db.pagosRealizados?.reduce((s, p) => s + p.montoPagado, 0) || 0;
-    const disp = Math.max(0, (db.userProfile.saldoInicial + incTot) - paid);
+    const disp = Math.max(0, (db.userProfile.saldoInicial + incAcreditados) - paid);
 
     if (document.getElementById("simSaldoBase")) document.getElementById("simSaldoBase").value = disp.toFixed(2);
     if (document.getElementById("simIngresoMensual")) document.getElementById("simIngresoMensual").value = incTot.toFixed(2);
@@ -505,17 +526,26 @@ function renderAll() {
     document.getElementById("userNameDisplay").innerText = db.userProfile.nombre || "FinanzasPro";
     const hoy = new Date();
     const cur = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+    const todayStr = hoy.toISOString().split("T")[0];
+    const todayDate = new Date(todayStr + "T00:00:00");
 
     let ingresosMes = 0;
+    let ingresosAcreditadosActuales = 0;
+
     const tblIng = document.getElementById("tblIngresosBody");
     tblIng.innerHTML = "";
     db.ingresos?.forEach(i => {
         if (i.fechaAcreditacion?.startsWith(cur)) ingresosMes += i.monto;
+        if (i.fechaAcreditacion && new Date(i.fechaAcreditacion + "T00:00:00") <= todayDate) {
+            ingresosAcreditadosActuales += i.monto;
+        }
         tblIng.innerHTML += `<tr><td><b>${i.categoria}</b></td><td style="color:var(--accent-emerald)">+$${i.monto.toFixed(2)}</td><td>${i.recurrente?'Recurrente':'Puntual'}</td><td>${i.fechaAcreditacion}</td><td>${i.registradoEl||''}</td><td><button onclick="editIncome('${i.id}')" class="btn-secondary">Editar</button> <button onclick="deleteIncome('${i.id}')" class="btn-danger">Eliminar</button></td></tr>`;
     });
 
     const totalPagado = db.pagosRealizados?.reduce((s, p) => s + p.montoPagado, 0) || 0;
-    const saldoDisp = Math.max(0, (db.userProfile.saldoInicial + ingresosMes) - totalPagado);
+    
+    // El saldo líquido actual solo toma el saldo inicial + ingresos cuya fecha ya pasó o es hoy, menos lo pagado.
+    const saldoDisp = Math.max(0, (db.userProfile.saldoInicial + ingresosAcreditadosActuales) - totalPagado);
 
     const cardsContainer = document.getElementById("cardsListContainer");
     cardsContainer.innerHTML = "";
@@ -598,7 +628,10 @@ function renderAll() {
     }
     document.getElementById("badgePendingCount").innerText = pendingCount;
 
+    // Lógica en cascada exacta solicitada:
+    // Quincena (15-31): Saldo Líquido Actual + Ingresos Quincena - Obligaciones Quincena
     const proyQ1 = (saldoDisp + incQ1) - q1Meta;
+    // Fin de mes (1-14): Remanente Quincena anterior + Ingresos Fin de Mes - Obligaciones Fin de Mes
     const proyFin = (proyQ1 + incQ2) - q2Meta;
 
     document.getElementById("lblSaldoBase").innerText = `$${saldoDisp.toFixed(2)}`;
@@ -620,7 +653,7 @@ function renderAll() {
     const banner = document.getElementById("proyeccionBanner");
     if (banner) {
         banner.className = proyQ1 < 0 ? "alert-banner" : "alert-banner ok";
-        banner.innerHTML = proyQ1 < 0 ? `⚠️ <strong>Déficit en Quincena:</strong> Faltarán $${Math.abs(proyQ1).toFixed(2)}` : `✅ <strong>Flujo Óptimo:</strong> Remanente de quincena: $${proyQ1.toFixed(2)} | Cierre fin de mes: $${proyFin.toFixed(2)}`;
+        banner.innerHTML = proyQ1 < 0 ? `⚠️ <strong>Déficit en Quincena:</strong> Faltarán $${Math.abs(proyQ1).toFixed(2)}` : `✅ <strong>Flujo En Cascada:</strong> Remanente de quincena (15-31): $${proyQ1.toFixed(2)} | Cierre fin de mes (1-14): $${proyFin.toFixed(2)}`;
     }
 
     const tblGastos = document.getElementById("tblGastosBody");
