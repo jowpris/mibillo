@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanzasPro - Suite Financiera Avanzada</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- PANTALLA LOGIN -->
+    <div id="loginScreen" class="auth-wrapper" style="display: none;">
+        <div class="auth-box">
+            <h2 style="font-size: 1.4rem; font-weight: 800; margin-bottom: 0.4rem;">Iniciar Sesión</h2>
+            <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 1.25rem;">Ingresa tus credenciales registradas.</p>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label>Número de Cédula</label>
+                    <input type="text" id="loginCedula" required placeholder="0999999999">
+                </div>
+                <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <label>Contraseña</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn-primary">Entrar al Sistema</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANTALLA WIZARD (Visible por defecto como fallback instantáneo) -->
+    <div id="wizardScreen" class="auth-wrapper" style="display: flex;">
+        <div class="auth-box">
+            <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 0.4rem;">Paso 1: Configurar Perfil</h2>
+            <p style="color: var(--text-secondary); font-size: 0.82rem; margin-bottom: 1.25rem;">Datos básicos para iniciar.</p>
+            
+            <form onsubmit="handleWizardStep(event)">
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label>Nombre Completo</label>
+                    <input type="text" id="wNombre" required placeholder="Ej: Carlos Pérez">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label>Cédula (Usuario)</label>
+                    <input type="text" id="wCedula" required placeholder="Ej: 0999999999">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label>Contraseña</label>
+                    <input type="password" id="wPassword" required placeholder="••••••••">
+                </div>
+                <div class="form-group" style="margin-bottom: 0.85rem;">
+                    <label>Saldo Líquido Inicial ($)</label>
+                    <input type="number" step="0.01" id="wSaldo" required placeholder="750.00">
+                </div>
+                <button type="submit" class="btn-primary">Continuar al Dashboard</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- APLICACIÓN PRINCIPAL -->
+    <div id="appLayout" class="app-layout">
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <div class="brand">
+                    <div class="brand-icon">$</div>
+                    <div>
+                        <h4 style="font-size:0.95rem; font-weight:800;" id="userNameDisplay">FinanzasPro</h4>
+                        <span style="font-size:0.62rem; color:var(--text-secondary);">CONTROL FINANCIERO</span>
+                    </div>
+                </div>
+                <ul class="nav-list">
+                    <li><button class="nav-btn active" onclick="switchTab('dashboard', this)">📊 Dashboard & Salud</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('obligaciones', this)">⚠️ Obligaciones & Días <span class="nav-badge" id="badgePendingCount">0</span></button></li>
+                    <li><button class="nav-btn" onclick="switchTab('pagos', this)">💰 Centro de Pagos (Quincenas)</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('tarjetas', this)">💳 Mis Tarjetas</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('gastos', this)">🛒 Registrar Gastos</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('ingresos', this)">💵 Ingresos</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('simulador', this)">📈 Simulador Financiero</button></li>
+                    <li><button class="nav-btn" onclick="switchTab('auditoria', this)">📜 Auditoría / Logs</button></li>
+                </ul>
+            </div>
+            <div style="border-top:1px solid var(--border-color); padding-top:0.85rem; display:flex; flex-direction:column; gap:0.4rem;">
+                <button onclick="exportCSV()" class="nav-btn" style="font-size:0.75rem; color:var(--accent-emerald);">📊 Exportar a Excel (CSV)</button>
+                <button onclick="exportJSON()" class="nav-btn" style="font-size:0.75rem; color:var(--accent-cyan);">📥 Descargar data.json</button>
+                <button onclick="resetFactoryData()" class="nav-btn" style="color:var(--accent-amber); font-size:0.75rem;">🔄 Reset de Fábrica</button>
+                <button onclick="logout()" class="nav-btn" style="color:var(--accent-rose); font-size:0.75rem;">🔒 Cerrar Sesión</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="top-header-bar">
+                <button class="mobile-toggle-btn" onclick="toggleSidebar()">☰</button>
+                <div class="health-gauge-box">
+                    <span>Salud Financiera:</span>
+                    <div class="gauge-bar-track">
+                        <div class="gauge-bar-fill" id="healthGaugeFill"></div>
+                    </div>
+                    <span id="healthGaugeLabel" style="color:var(--accent-emerald);">Óptima (0%)</span>
+                </div>
+                <div>
+                    <button onclick="togglePrivacyMode()" id="btnPrivacyToggle" class="btn-secondary" style="font-size:0.78rem;">👁️ Ocultar Saldos</button>
+                </div>
+            </div>
+
+            <div id="proyeccionBanner" class="alert-banner ok">
+                <span>💡 Analizando proyección acumulativa de caja...</span>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span>Saldo Líquido Actual</span>
+                    <h3 class="sensitive-data" id="lblSaldoBase">$0.00</h3>
+                </div>
+                <div class="metric-card">
+                    <span>Ingresos Mes Actual</span>
+                    <h3 class="card-emerald sensitive-data" id="lblIngresosMes">$0.00</h3>
+                </div>
+                <div class="metric-card">
+                    <span>Deuda Tarjetas (Bloqueada)</span>
+                    <h3 class="card-indigo sensitive-data" id="lblDeudaTarjetas">$0.00</h3>
+                </div>
+                <div class="metric-card">
+                    <span>Remanente Quincena</span>
+                    <h3 class="card-amber sensitive-data" id="lblProyQuincena">$0.00</h3>
+                </div>
+                <div class="metric-card">
+                    <span>Proyección Fin de Mes</span>
+                    <h3 class="card-rose sensitive-data" id="lblProyFinMes">$0.00</h3>
+                </div>
+            </div>
+
+            <!-- VISTA 1 -->
+            <section id="sec-dashboard" class="content-section active">
+                <div class="form-box">
+                    <h3>Resumen Financiero y Estado de Flujo</h3>
+                </div>
+                <div class="chart-container">
+                    <h4 style="font-size:0.9rem; font-weight:800; margin-bottom:0.5rem;">📊 Comparativa de Flujo de Caja y Compromisos</h4>
+                    <div id="barChartContainer" class="bar-chart-visual"></div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Detalle / Periodo</th>
+                                <th>Monto Orig.</th>
+                                <th>Cuota/Cobro</th>
+                                <th>Modo</th>
+                                <th>Vencimiento</th>
+                                <th>Grupo de Pago</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblSummaryBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA 2 -->
+            <section id="sec-obligaciones" class="content-section">
+                <div class="form-box">
+                    <h3>⚠️ Obligaciones Pendientes y Conteo de Días</h3>
+                </div>
+                <div id="alertCardsGrid" class="alert-card-grid"></div>
+            </section>
+
+            <!-- VISTA 3 -->
+            <section id="sec-pagos" class="content-section">
+                <div class="form-box">
+                    <h3>💰 Centro de Pagos y Liquidación por Quincena</h3>
+                </div>
+                <div class="centro-pagos-grid">
+                    <div class="pago-bloque">
+                        <div class="bloque-header">💳 Tarjetas — Dinero Quincena (15-31)</div>
+                        <div id="blockCardsQ1"></div>
+                    </div>
+                    <div class="pago-bloque">
+                        <div class="bloque-header">🏠 Arriendos / Servicios — Dinero Quincena (15-31)</div>
+                        <div id="blockExpensesQ1"></div>
+                    </div>
+                    <div class="pago-bloque">
+                        <div class="bloque-header">💳 Tarjetas — Dinero Fin de Mes (1-14)</div>
+                        <div id="blockCardsQ2"></div>
+                    </div>
+                    <div class="pago-bloque">
+                        <div class="bloque-header">🏠 Arriendos / Servicios — Dinero Fin de Mes (1-14)</div>
+                        <div id="blockExpensesQ2"></div>
+                    </div>
+                </div>
+                <h3 style="margin-top:2rem; margin-bottom:0.5rem;">Historial de Pagos Realizados</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Compromiso / Tarjeta</th>
+                                <th>Monto Pagado</th>
+                                <th>Fecha de Pago</th>
+                                <th>Auditoría</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblCardPaymentsBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA 4 -->
+            <section id="sec-tarjetas" class="content-section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap; gap:1rem;">
+                    <h3>Mis Tarjetas de Crédito</h3>
+                    <button onclick="openAddCardModal()" class="btn-primary" style="margin-top:0; width:auto; padding:0.6rem 1.25rem;">+ Agregar Tarjeta</button>
+                </div>
+                <div id="cardsListContainer" class="cards-modern-grid"></div>
+            </section>
+
+            <!-- VISTA 5 -->
+            <section id="sec-gastos" class="content-section">
+                <div class="form-box">
+                    <h3 id="expFormTitle">Registrar / Editar Consumo o Compromiso</h3>
+                    <div class="narrative-flow-box" id="narrativeGuideText">Selecciona el tipo de gasto.</div>
+                    <form onsubmit="saveExpenseForm(event)">
+                        <input type="hidden" id="expEditId" value="">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Ejecución del Gasto</label>
+                                <select id="expExecutionType" onchange="handleNarrativeFlowChange()">
+                                    <option value="IMMEDIATE">⚡ Gasto Inmediato al Contado</option>
+                                    <option value="PROGRAMMED">📅 Compromiso Programado / Tarjeta</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Categoría</label>
+                                <select id="expCategorySelect" onchange="checkCustomExpenseCategory()">
+                                    <option value="Arriendo">Arriendo</option>
+                                    <option value="Servicio de Agua">Servicio de Agua</option>
+                                    <option value="Servicio de Luz">Servicio de Luz</option>
+                                    <option value="Internet Fibra">Internet Fibra</option>
+                                    <option value="Comida / Supermercado">Comida / Supermercado</option>
+                                    <option value="OTRO">+ Otro Gasto Personalizado</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="boxCustomCategory" style="display:none;">
+                                <label>Nombre Personalizado</label>
+                                <input type="text" id="expCustomCategory" placeholder="Ej: Netflix">
+                            </div>
+                            <div class="form-group">
+                                <label>Monto Total ($)</label>
+                                <input type="number" step="0.01" id="expMonto" required placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label>Fecha</label>
+                                <input type="date" id="expFecha" required>
+                            </div>
+                        </div>
+
+                        <div id="boxProgrammedOptions" style="display:none; margin-top:1rem; border-top:1px solid var(--border-color); padding-top:1rem;" class="form-grid">
+                            <div class="form-group">
+                                <label>Método de Pago</label>
+                                <select id="expMetodo" onchange="handleNarrativeFlowChange()">
+                                    <option value="cash">Efectivo / Transferencia</option>
+                                    <option value="card">Tarjeta de Crédito</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>¿Recurrente Fijo Mensual?</label>
+                                <select id="expRecurrente">
+                                    <option value="true">Sí (Auto-renovable)</option>
+                                    <option value="false">No (Puntual)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="boxCardSpecificOptions" style="display:none; margin-top:0.85rem;" class="form-grid">
+                            <div class="form-group">
+                                <label>Tarjeta de Crédito</label>
+                                <select id="expTarjetaSelect"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Modo de Crédito</label>
+                                <select id="expModoCredito" onchange="toggleDiferidoOptions()">
+                                    <option value="corriente">Corriente</option>
+                                    <option value="diferido">Diferido</option>
+                                </select>
+                            </div>
+                            <div class="form-group group-diferido" style="display:none;">
+                                <label>Cuotas</label>
+                                <input type="number" id="expCuotas" value="3" min="2">
+                            </div>
+                            <div class="form-group group-diferido" style="display:none;">
+                                <label>Meses de Gracia</label>
+                                <select id="expMesesGracia">
+                                    <option value="0">Sin gracia</option>
+                                    <option value="1">1 Mes</option>
+                                    <option value="2">2 Meses</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-primary" id="btnSaveExpense">Guardar Registro</button>
+                        <button type="button" class="btn-secondary" id="btnCancelEditExpense" onclick="cancelExpenseEdit()" style="display:none; margin-top:0.4rem; width:100%;">Cancelar Edición</button>
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Detalle</th>
+                                <th>Monto</th>
+                                <th>Modo</th>
+                                <th>Vencimiento</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblGastosBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA 6 -->
+            <section id="sec-ingresos" class="content-section">
+                <div class="form-box">
+                    <h3 id="incFormTitle">Registrar Ingreso</h3>
+                    <form onsubmit="saveIncomeForm(event)">
+                        <input type="hidden" id="incEditId" value="">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Categoría</label>
+                                <select id="incCat">
+                                    <option value="Sueldo Fijo Quincena">Sueldo Fijo Quincena</option>
+                                    <option value="Sueldo Fijo Fin de Mes">Sueldo Fijo Fin de Mes</option>
+                                    <option value="Cachuelo / Freelance">Cachuelo / Freelance</option>
+                                    <option value="Negocio">Negocio</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Monto ($)</label>
+                                <input type="number" step="0.01" id="incMonto" required placeholder="750.00">
+                            </div>
+                            <div class="form-group">
+                                <label>Fecha Acreditación</label>
+                                <input type="date" id="incFecha" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Frecuencia</label>
+                                <select id="incRecurrente">
+                                    <option value="true">Recurrente Mensual</option>
+                                    <option value="false">Puntual</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" id="btnSaveIncome">Guardar Ingreso</button>
+                        <button type="button" class="btn-secondary" id="btnCancelEditIncome" onclick="cancelIncomeEdit()" style="display:none; margin-top:0.4rem; width:100%;">Cancelar Edición</button>
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fuente</th>
+                                <th>Monto</th>
+                                <th>Tipo</th>
+                                <th>Fecha</th>
+                                <th>Auditoría</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblIngresosBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA 7 -->
+            <section id="sec-simulador" class="content-section">
+                <div class="form-box">
+                    <h3>📈 Simulador Financiero y Proyección</h3>
+                    <form onsubmit="runFinancialSimulator(event)" style="margin-top:1rem;">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Saldo Líquido Inicial ($)</label>
+                                <input type="number" step="0.01" id="simSaldoBase" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Ingresos Mensuales ($)</label>
+                                <input type="number" step="0.01" id="simIngresoMensual" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Costo de Vida ($)</label>
+                                <input type="number" step="0.01" id="simCostoVida" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Descripción Deuda</label>
+                                <input type="text" id="simDeudaDetalle" value="Muebles" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Cuota Mensual ($)</label>
+                                <input type="number" step="0.01" id="simDeudaCuota" value="135.00" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Plazo (Meses)</label>
+                                <input type="number" id="simDeudaPlazo" value="15" min="1" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" style="margin-top:1rem;">🚀 Simular Mes a Mes</button>
+                    </form>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Periodo</th>
+                                <th>Ingresos</th>
+                                <th>Costo Vida</th>
+                                <th>Cuota Simulada</th>
+                                <th>Neto Mes</th>
+                                <th>Saldo Acumulado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblSimuladorBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VISTA 8 -->
+            <section id="sec-auditoria" class="content-section">
+                <div class="form-box">
+                    <h3>📜 Bitácora de Auditoría</h3>
+                    <div style="display:flex; gap:0.85rem; margin-top:0.85rem; flex-wrap:wrap;">
+                        <input type="text" id="auditSearch" onkeyup="renderAll()" placeholder="🔍 Buscar..." style="background:#030712; border:1px solid var(--border-color); color:white; padding:0.55rem 0.9rem; border-radius:8px; flex:1;">
+                        <select id="auditFilterModule" onchange="renderAll()" style="background:#030712; border:1px solid var(--border-color); color:white; padding:0.55rem 0.9rem; border-radius:8px;">
+                            <option value="ALL">Todos</option>
+                            <option value="Ingresos">Ingresos</option>
+                            <option value="Gastos">Gastos</option>
+                            <option value="Tarjetas">Tarjetas</option>
+                            <option value="Pagos">Pagos</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha y Hora</th>
+                                <th>Módulo</th>
+                                <th>Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblAuditLogsBody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab-btn" onclick="openQuickExpenseModal()">+</button>
+
+    <!-- MODAL PAGO -->
+    <div class="modal-backdrop" id="modalPayCard">
+        <div class="modal-card">
+            <h3 id="modalPayTitle">Registrar Pago</h3>
+            <p id="modalPaySubtitle" style="color:var(--text-secondary); font-size:0.78rem; margin-bottom:1.25rem;"></p>
+            <form onsubmit="submitModalPayment(event)">
+                <input type="hidden" id="modalPayItemId">
+                <input type="hidden" id="modalPayItemType">
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Pendiente ($)</label>
+                    <input type="text" id="modalPayDebtValue" readonly style="color:var(--accent-rose); font-weight:bold;">
+                </div>
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Monto a Pagar ($)</label>
+                    <input type="number" step="0.01" id="modalPayAmountInput" required>
+                </div>
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Mora ($)</label>
+                    <input type="number" step="0.01" id="modalPayMoraInput" value="0.00">
+                </div>
+                <div class="form-group" style="margin-bottom:1.25rem;">
+                    <label>Fecha</label>
+                    <input type="date" id="modalPayDateInput" required>
+                </div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn-secondary" onclick="closePayModal()" style="flex:1;">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="flex:1; margin-top:0;">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TARJETA -->
+    <div class="modal-backdrop" id="modalCardForm">
+        <div class="modal-card">
+            <h3 id="cardFormTitleModal">Registrar Tarjeta</h3>
+            <form onsubmit="saveCardForm(event)" style="margin-top:1rem;">
+                <input type="hidden" id="crdEditId">
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Alias</label>
+                    <input type="text" id="crdAlias" required placeholder="Ej: Visa Black">
+                </div>
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Banco</label>
+                    <select id="crdBanco">
+                        <option value="Banco Pichincha">Banco Pichincha</option>
+                        <option value="Banco Guayaquil">Banco Guayaquil</option>
+                        <option value="Produbanco">Produbanco</option>
+                        <option value="Diners Club">Diners Club</option>
+                        <option value="Otro Banco">Otro Banco</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Cupo Total ($)</label>
+                    <input type="number" step="0.01" id="crdCupo" required>
+                </div>
+                <div class="form-group" style="margin-bottom:0.85rem;">
+                    <label>Día Corte (1-31)</label>
+                    <input type="number" min="1" max="31" id="crdCorte" required>
+                </div>
+                <div class="form-group" style="margin-bottom:1.25rem;">
+                    <label>Día Máx. Pago (1-31)</label>
+                    <input type="number" min="1" max="31" id="crdPago" required>
+                </div>
+                <div style="display:flex; gap:0.6rem;">
+                    <button type="button" class="btn-secondary" onclick="closeCardFormModal()" style="flex:1;">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="flex:1; margin-top:0;" id="btnSaveCardModal">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL CONSUMOS -->
+    <div class="modal-backdrop" id="modalCardDetails">
+        <div class="modal-card" style="max-width: 650px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <h3 id="modalCardTitle">Consumos</h3>
+                <button class="btn-secondary" onclick="closeCardDetailsModal()">✕ Cerrar</button>
+            </div>
+            <div id="modalCardSummary" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1rem;"></div>
+            <div class="table-wrapper" style="max-height:350px; overflow-y:auto; margin-top:0;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Detalle</th>
+                            <th>Monto</th>
+                            <th>Modo</th>
+                            <th>Plazo</th>
+                            <th>Fecha</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tblCardConsumptionsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js" defer></script>
+</body>
+</html>
